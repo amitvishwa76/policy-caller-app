@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f7f5ef;
+  --paper-raised: #ffffff;
+  --ink: #20221e;
+  --ink-soft: #5c5c54;
+  --navy: #1f3a5f;
+  --navy-deep: #142a45;
+  --amber: #c98a2e;
+  --amber-soft: #f2e2c4;
+  --success: #3f7a54;
+  --danger: #b23a32;
+  --border: #ded9cc;
+  --border-strong: #c7c0ab;
+
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, ui-serif, serif;
+  --font-sans: -apple-system, "Segoe UI", "IBM Plex Sans", ui-sans-serif, Arial, sans-serif;
+  --font-mono: "SF Mono", "IBM Plex Mono", Menlo, Consolas, ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.font-serif-brand {
+  font-family: var(--font-serif);
+}
+
+.font-mono-data {
+  font-family: var(--font-mono);
+}
+
+.hairline {
+  border-color: var(--border);
+}
