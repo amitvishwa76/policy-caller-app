@@ -40,5 +40,6 @@ export const POLICY_TABLE = "policy_list";
 export const SETTINGS_TABLE = "sync_settings";
 export const SYNC_LOG_TABLE = "sync_log";
 export const GENESYS_SYNC_STATE_TABLE = "genesys_sync_state";
+export const PAYMENT_LINKS_TABLE = "payment_links";
 
 export default getSupabaseAdmin;

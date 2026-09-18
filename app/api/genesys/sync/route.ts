@@ -6,7 +6,8 @@ import getSupabaseAdmin, {
   PolicyRow,
 } from "@/lib/supabase";
 import { parseDueDate, isWithinDaysAhead } from "@/lib/date";
-import { insertPoliciesToCallingList } from "@/lib/genesys";
+import { buildGenesysContactData, insertContactsToCallingList } from "@/lib/genesys";
+import { getOrCreatePaymentLink } from "@/lib/paymentLink";
 
 export const dynamic = "force-dynamic";
 
@@ -52,25 +53,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "No policies matched the filter.", count: 0 });
     }
 
-    const result = await insertPoliciesToCallingList(rows);
-
-    await supabase.from(GENESYS_SYNC_STATE_TABLE).upsert(
-      rows.map((r) => ({ policy_id: r.id, synced_at: new Date().toISOString() }))
+    const contactItems = await Promise.all(
+      rows.map(async (policy) => {
+        const { url } = await getOrCreatePaymentLink(supabase!, policy.id);
+        return { policyId: policy.id, data: buildGenesysContactData(policy, url) };
+      })
     );
+
+    const results = await insertContactsToCallingList(contactItems);
+    const succeeded = results.filter((r) => !r.error);
+    const failed = results.filter((r) => r.error);
+
+    if (succeeded.length > 0) {
+      await supabase.from(GENESYS_SYNC_STATE_TABLE).upsert(
+        succeeded.map((r) => ({
+          policy_id: r.policyId,
+          synced_at: new Date().toISOString(),
+          genesys_contact_id: r.contactId,
+        }))
+      );
+    }
 
     await logSyncResult(supabase, {
       trigger: "manual",
       days,
       matched: rows.length,
-      inserted: rows.length - result.errors.length * 0, // errors are per-batch, not per-contact
-      status: result.errors.length > 0 ? "partial_error" : "success",
-      detail: JSON.stringify(result),
+      inserted: succeeded.length,
+      status: failed.length > 0 ? "partial_error" : "success",
+      detail: JSON.stringify(results),
     });
 
     return NextResponse.json({
       message: "Sync completed.",
       matched: rows.length,
-      result,
+      sent: succeeded.length,
+      errors: failed.map((f) => ({ policyId: f.policyId, message: f.error })),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -99,8 +116,6 @@ async function logSyncResult(
     detail: string | null;
   }
 ) {
-  // Best-effort logging; ignore failures so a logging problem never
-  // masks the actual sync result returned to the caller.
   await supabase
     .from(SYNC_LOG_TABLE)
     .insert({ ...entry, ran_at: new Date().toISOString() })

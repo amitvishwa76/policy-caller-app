@@ -4,10 +4,23 @@
 
 -- If you ran an earlier version of this migration (with a 'frequency'
 -- daily/twice_daily schedule), this section upgrades it to the new
--- manual/auto model. Safe to run even on a fresh database.
+-- manual/auto model. Safe to run even on a fresh database, and safe to
+-- run more than once.
 alter table if exists sync_settings drop constraint if exists sync_settings_frequency_check;
 alter table if exists sync_settings drop column if exists frequency;
-alter table if exists sync_settings rename column last_run_at to last_auto_check_at;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'sync_settings' and column_name = 'last_run_at'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_name = 'sync_settings' and column_name = 'last_auto_check_at'
+  ) then
+    alter table sync_settings rename column last_run_at to last_auto_check_at;
+  end if;
+end $$;
 
 create table if not exists sync_settings (
   id int primary key,
@@ -44,3 +57,15 @@ create table if not exists genesys_sync_state (
 insert into sync_settings (id, days_ahead, only_pending, auto_send)
 values (1, 60, true, false)
 on conflict (id) do nothing;
+
+-- Dummy payment links: one persistent, unguessable token per policy.
+-- The same link is reused every time a policy is (re)synced to Genesys.
+create table if not exists payment_links (
+  token text primary key,
+  policy_id bigint not null unique references policy_list (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+-- Track the Genesys contact ID returned when we insert each contact, so a
+-- later payment can update that specific contact's prem_paid_status.
+alter table genesys_sync_state add column if not exists genesys_contact_id text;

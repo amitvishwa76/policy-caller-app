@@ -57,18 +57,18 @@ export default function SyncPanel({
       } else if (json.count === 0) {
         setOutcome({ kind: "info", message: "No policies matched the filter — nothing sent." });
       } else {
-        const errCount = json.result?.errors?.length ?? 0;
+        const errCount = json.errors?.length ?? 0;
         if (errCount > 0) {
           setOutcome({
             kind: "error",
-            message: `Sent ${json.matched} contact(s), but ${errCount} batch(es) failed: ${extractGenesysError(
-              json.result.errors[0].message
+            message: `Sent ${json.sent} of ${json.matched} contact(s); ${errCount} failed: ${extractGenesysError(
+              json.errors[0].message
             )}`,
           });
         } else {
           setOutcome({
             kind: "success",
-            message: `Sent ${json.matched} contact(s) to the Genesys calling list.`,
+            message: `Sent ${json.sent} contact(s) to the Genesys calling list.`,
           });
         }
       }
@@ -94,7 +94,7 @@ export default function SyncPanel({
         if (next && json.autoSyncOutcome?.ranSync) {
           setOutcome({
             kind: "success",
-            message: `Auto-send is on. Sent ${json.autoSyncOutcome.matched} contact(s) already matching the filter.`,
+            message: `Auto-send is on. Sent ${json.autoSyncOutcome.sent} contact(s) already matching the filter.`,
           });
         } else if (next) {
           setOutcome({ kind: "info", message: "Auto-send is on — new due policies will be sent automatically." });

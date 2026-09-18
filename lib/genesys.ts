@@ -13,14 +13,11 @@ import { parseDueDate } from "./date";
  *
  * Contact insert: POST /api/v2/outbound/contactlists/{contactListId}/contacts
  * Docs: https://developer.genesys.cloud/routing/outbound/contactmanagement
- * Accepts an array of up to 1000 contacts per call; each contact has a
- * `data` object whose keys must match the contact list's configured columns.
  */
 
 const REGION_DOMAIN = process.env.GENESYS_REGION_DOMAIN || "aps1.pure.cloud";
 const LOGIN_BASE = `https://login.${REGION_DOMAIN}`;
 const API_BASE = `https://api.${REGION_DOMAIN}`;
-const MAX_CONTACTS_PER_REQUEST = 1000;
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -34,7 +31,6 @@ async function getAccessToken(): Promise<string> {
     );
   }
 
-  // Reuse the token until shortly before it expires.
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
     return cachedToken.token;
   }
@@ -63,56 +59,66 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
+function getContactListId(): string {
+  const id = process.env.GENESYS_CALLING_LIST_ID;
+  if (!id) throw new Error("Missing GENESYS_CALLING_LIST_ID environment variable.");
+  return id;
+}
+
 /**
- * Maps a Supabase policy_list row into the `data` payload Genesys expects
- * for a contact list contact. Keys on the right must match the columns
- * configured on the actual Genesys contact list exactly (case-sensitive).
+ * The text that actually lands in the payment_link contact field. Edit this
+ * to change how the link appears wherever Genesys inserts it (WhatsApp,
+ * SMS, etc.) — the underlying URL/token itself is unaffected.
+ */
+function formatPaymentLinkMessage(url: string): string {
+  return `Pay securely here: \u{1F449} ${url}`;
+}
+
+type GenesysContactData = Record<string, string>;
+
+/**
+ * Maps a Supabase policy_list row (+ that policy's dummy payment link) into
+ * the `data` payload Genesys expects for a contact list contact. Keys must
+ * match the contact list's configured columns exactly (case-sensitive).
  *
  * Genesys validates that a contact's `data` object contains EXACTLY the
  * column set defined on the list — sending only a subset is rejected with
  * "The contact columns do not match what is required in the list". So every
- * column below is required in the payload, even ones policy_list has no
- * data for (those go in as empty strings, except the flag columns which
- * default to "0" so nothing is accidentally marked callable on that channel).
+ * column below is required, even ones policy_list has no data for (blank
+ * strings, except the flag columns which default to "0").
  *
- * Confirmed contact list columns (2026-09-18): Phone_Num, Policy_Num,
- * Customer_Name, Plan, Premium, Prem_due, Prem_Paid_Status, email_id,
- * whatsapp_num, Voice_flag, WhatsApp_flag, Email_Flag, Dial_Count, Due_days,
- * WA_Temp, Temp1-6.
- *
- * If you want Voice_flag/WhatsApp_flag/Email_Flag set to "1" by default for
- * every synced contact (so they're immediately dialable/messageable), change
- * the defaults below.
+ * Confirmed contact list columns (2026-09-18, updated schema): phon_num,
+ * policy_num, cust_name, policy_name, premium_amt, policy_due,
+ * prem_paid_status, email_id, whatsapp_num, voice_flag, whatsapp_flag,
+ * email_flag, dial_count, due_days, wa_temp, payment_link, temp2-6.
  */
-export function policyToGenesysContact(policy: PolicyRow) {
+export function buildGenesysContactData(
+  policy: PolicyRow,
+  paymentLinkUrl: string
+): GenesysContactData {
   const s = (v: string | number | null) => (v === null || v === undefined ? "" : String(v));
   return {
-    data: {
-      Phone_Num: s(policy.phone_num),
-      Policy_Num: s(policy.policy_no),
-      Customer_Name: s(policy.policy_holder),
-      Plan: s(policy.plan),
-      Premium: s(policy.amount),
-      Prem_due: s(policy.due_date),
-      Prem_Paid_Status: s(policy.payment_status),
-      email_id: s(policy.email_id),
-      whatsapp_num: s(policy.whatsapp_num),
-      Due_days: policy.due_date ? daysUntil(policy.due_date) : "",
-      // Columns not present in policy_list — sent as blank/default so the
-      // contact's column set exactly matches the list's schema.
-      Voice_flag: "0",
-      WhatsApp_flag: "0",
-      Email_Flag: "0",
-      Dial_Count: "0",
-      WA_Temp: "",
-      Temp1: "",
-      Temp2: "",
-      Temp3: "",
-      Temp4: "",
-      Temp5: "",
-      Temp6: "",
-    },
-    callable: true,
+    phon_num: s(policy.phone_num),
+    policy_num: s(policy.policy_no),
+    cust_name: s(policy.policy_holder),
+    policy_name: s(policy.plan),
+    premium_amt: s(policy.amount),
+    policy_due: s(policy.due_date),
+    prem_paid_status: s(policy.payment_status),
+    email_id: s(policy.email_id),
+    whatsapp_num: s(policy.whatsapp_num),
+    due_days: policy.due_date ? daysUntil(policy.due_date) : "",
+    voice_flag: "0",
+    whatsapp_flag: "0",
+    email_flag: "0",
+    dial_count: "0",
+    wa_temp: "",
+    payment_link: formatPaymentLinkMessage(paymentLinkUrl),
+    temp2: "",
+    temp3: "",
+    temp4: "",
+    temp5: "",
+    temp6: "",
   };
 }
 
@@ -127,58 +133,103 @@ function daysUntil(dueDateText: string): string {
   return String(diff);
 }
 
-export type GenesysSyncResult = {
-  contactListId: string;
-  totalContacts: number;
-  batches: number;
-  errors: { batchIndex: number; message: string }[];
+export type ContactInsertOutcome = {
+  policyId: number;
+  contactId: string | null;
+  error: string | null;
 };
 
 /**
- * Inserts policies into the configured Genesys Cloud calling list.
- * Batches requests at 1000 contacts (the API's documented limit per call).
+ * Inserts contacts into the configured Genesys calling list — one API call
+ * per contact, rather than batching. This is slightly less efficient than
+ * Genesys's up-to-1000-per-call bulk endpoint, but it makes it unambiguous
+ * which returned contact ID belongs to which policy (needed so a later
+ * payment can update that exact contact's Prem_Paid_Status). Fine at the
+ * volumes a "due in N days" filter produces; revisit if you're regularly
+ * syncing thousands of policies in one go.
  */
-export async function insertPoliciesToCallingList(
-  policies: PolicyRow[],
-  contactListIdOverride?: string
-): Promise<GenesysSyncResult> {
-  const contactListId = contactListIdOverride || process.env.GENESYS_CALLING_LIST_ID;
-  if (!contactListId) {
-    throw new Error("Missing GENESYS_CALLING_LIST_ID environment variable.");
-  }
-
+export async function insertContactsToCallingList(
+  items: { policyId: number; data: GenesysContactData }[]
+): Promise<ContactInsertOutcome[]> {
+  const contactListId = getContactListId();
   const token = await getAccessToken();
-  const contacts = policies.map(policyToGenesysContact);
 
-  const errors: { batchIndex: number; message: string }[] = [];
-  let batches = 0;
+  const results: ContactInsertOutcome[] = [];
 
-  for (let i = 0; i < contacts.length; i += MAX_CONTACTS_PER_REQUEST) {
-    const batch = contacts.slice(i, i + MAX_CONTACTS_PER_REQUEST);
-    batches += 1;
+  for (const item of items) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v2/outbound/contactlists/${contactListId}/contacts`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify([{ data: item.data, callable: true }]),
+        }
+      );
 
-    const res = await fetch(
-      `${API_BASE}/api/v2/outbound/contactlists/${contactListId}/contacts`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(batch),
+      if (!res.ok) {
+        const text = await res.text();
+        results.push({ policyId: item.policyId, contactId: null, error: `HTTP ${res.status}: ${text}` });
+        continue;
       }
-    );
 
-    if (!res.ok) {
-      const text = await res.text();
-      errors.push({ batchIndex: batches - 1, message: `HTTP ${res.status}: ${text}` });
+      const json = await res.json();
+      const created = Array.isArray(json) ? json[0] : json;
+      results.push({ policyId: item.policyId, contactId: created?.id ?? null, error: null });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      results.push({ policyId: item.policyId, contactId: null, error: message });
     }
   }
 
-  return {
-    contactListId,
-    totalContacts: contacts.length,
-    batches,
-    errors,
-  };
+  return results;
+}
+
+/**
+ * Updates a single existing contact's data fields (e.g. Prem_Paid_Status
+ * after a payment). Genesys's update endpoint replaces the contact's data
+ * object, so we fetch the current contact first and merge in just the
+ * changed fields rather than risking clobbering the rest.
+ */
+export async function updateGenesysContactFields(
+  contactId: string,
+  changes: Partial<GenesysContactData>
+): Promise<void> {
+  const contactListId = getContactListId();
+  const token = await getAccessToken();
+
+  const getRes = await fetch(
+    `${API_BASE}/api/v2/outbound/contactlists/${contactListId}/contacts/${contactId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!getRes.ok) {
+    const text = await getRes.text();
+    throw new Error(`Failed to fetch Genesys contact ${contactId}: HTTP ${getRes.status}: ${text}`);
+  }
+  const current = await getRes.json();
+
+  const putRes = await fetch(
+    `${API_BASE}/api/v2/outbound/contactlists/${contactListId}/contacts/${contactId}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: contactId,
+        contactListId,
+        data: { ...current.data, ...changes },
+        callable: current.callable,
+      }),
+    }
+  );
+
+  if (!putRes.ok) {
+    const text = await putRes.text();
+    throw new Error(`Failed to update Genesys contact ${contactId}: HTTP ${putRes.status}: ${text}`);
+  }
 }

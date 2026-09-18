@@ -6,20 +6,22 @@ import getSupabaseAdmin, {
   PolicyRow,
 } from "./supabase";
 import { parseDueDate, isWithinDaysAhead } from "./date";
-import { insertPoliciesToCallingList } from "./genesys";
+import { buildGenesysContactData, insertContactsToCallingList } from "./genesys";
+import { getOrCreatePaymentLink } from "./paymentLink";
 
 const SETTINGS_ROW_ID = 1;
 
 export type AutoSyncOutcome =
   | { ranSync: false; reason: string }
-  | { ranSync: true; matched: number; errors: { batchIndex: number; message: string }[] };
+  | { ranSync: true; matched: number; sent: number; errors: { policyId: number; message: string }[] };
 
 /**
  * Checks whether auto-send is enabled, finds policies that now match the
  * due-soon filter AND haven't already been sent to Genesys, sends only
  * those (so nothing gets duplicated), and records them in
- * genesys_sync_state. Safe to call often — a cheap no-op when auto-send is
- * off or nothing new qualifies.
+ * genesys_sync_state (including the Genesys contact ID, so a later payment
+ * can update that exact contact). Safe to call often — a cheap no-op when
+ * auto-send is off or nothing new qualifies.
  *
  * Called from two places:
  *  - the Vercel Cron endpoint (periodic sweep — catches policies that enter
@@ -62,7 +64,6 @@ export async function checkAndAutoSync(
     return { ranSync: false, reason: "No policies currently match the filter." };
   }
 
-  // Exclude policies already sent (by auto or manual send) so nothing duplicates.
   const { data: alreadySynced, error: syncStateError } = await supabase
     .from(GENESYS_SYNC_STATE_TABLE)
     .select("policy_id")
@@ -81,26 +82,44 @@ export async function checkAndAutoSync(
     return { ranSync: false, reason: "All currently-matching policies were already sent." };
   }
 
-  const result = await insertPoliciesToCallingList(newMatches);
-
-  // Record every attempted policy as synced, even on partial batch errors,
-  // to avoid a hard failure looping forever; batch-level errors are still
-  // visible in sync_log for follow-up.
-  await supabase.from(GENESYS_SYNC_STATE_TABLE).upsert(
-    newMatches.map((p) => ({ policy_id: p.id, synced_at: new Date().toISOString() }))
+  const contactItems = await Promise.all(
+    newMatches.map(async (policy) => {
+      const { url } = await getOrCreatePaymentLink(supabase, policy.id);
+      return { policyId: policy.id, data: buildGenesysContactData(policy, url) };
+    })
   );
+
+  const results = await insertContactsToCallingList(contactItems);
+
+  const succeeded = results.filter((r) => !r.error);
+  const failed = results.filter((r) => r.error);
+
+  if (succeeded.length > 0) {
+    await supabase.from(GENESYS_SYNC_STATE_TABLE).upsert(
+      succeeded.map((r) => ({
+        policy_id: r.policyId,
+        synced_at: new Date().toISOString(),
+        genesys_contact_id: r.contactId,
+      }))
+    );
+  }
 
   await supabase.from(SYNC_LOG_TABLE).insert({
     trigger: "auto",
     days: settings.days_ahead,
     matched: newMatches.length,
-    inserted: newMatches.length,
-    status: result.errors.length > 0 ? "partial_error" : "success",
-    detail: JSON.stringify(result),
+    inserted: succeeded.length,
+    status: failed.length > 0 ? "partial_error" : "success",
+    detail: JSON.stringify(results),
     ran_at: new Date().toISOString(),
   });
 
-  return { ranSync: true, matched: newMatches.length, errors: result.errors };
+  return {
+    ranSync: true,
+    matched: newMatches.length,
+    sent: succeeded.length,
+    errors: failed.map((f) => ({ policyId: f.policyId, message: f.error! })),
+  };
 }
 
 async function touchLastCheck(supabase: ReturnType<typeof getSupabaseAdmin>) {
