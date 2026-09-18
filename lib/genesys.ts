@@ -90,7 +90,8 @@ type GenesysContactData = Record<string, string>;
  * Confirmed contact list columns (2026-09-18, updated schema): phon_num,
  * policy_num, cust_name, policy_name, premium_amt, policy_due,
  * prem_paid_status, email_id, whatsapp_num, voice_flag, whatsapp_flag,
- * email_flag, dial_count, due_days, wa_temp, payment_link, temp2-6.
+ * email_flag, dial_count, due_days, wa_temp, payment_link,
+ * payment_transcid, temp3-6.
  */
 export function buildGenesysContactData(
   policy: PolicyRow,
@@ -114,7 +115,7 @@ export function buildGenesysContactData(
     dial_count: "0",
     wa_temp: "",
     payment_link: formatPaymentLinkMessage(paymentLinkUrl),
-    temp2: "",
+    payment_transcid: "",
     temp3: "",
     temp4: "",
     temp5: "",

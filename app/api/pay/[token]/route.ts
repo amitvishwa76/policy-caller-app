@@ -69,10 +69,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ to
       return NextResponse.json({ error: error?.message || "Payment update failed." }, { status: 500 });
     }
 
-    // Best-effort: also flip the Genesys contact's Prem_Paid_Status, if we
-    // know which contact this policy maps to. A failure here never blocks
-    // the payment itself — it's already recorded in Supabase, which is the
-    // source of truth. The failure is logged for follow-up.
+    // Best-effort: also flip the Genesys contact's prem_paid_status and
+    // record the transaction ID, if we know which contact this policy maps
+    // to. A failure here never blocks the payment itself — it's already
+    // recorded in Supabase, which is the source of truth. The failure is
+    // logged for follow-up.
     let genesysUpdate: { ok: boolean; error?: string } = { ok: false };
     const { data: syncState } = await supabase
       .from(GENESYS_SYNC_STATE_TABLE)
@@ -84,6 +85,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ to
       try {
         await updateGenesysContactFields(syncState.genesys_contact_id, {
           prem_paid_status: "PAID",
+          payment_transcid: transactionId,
         });
         genesysUpdate = { ok: true };
       } catch (err: unknown) {
