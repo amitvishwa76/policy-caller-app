@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import getSupabaseAdmin, { POLICY_TABLE, PolicyRow } from "@/lib/supabase";
+import getSupabaseAdmin, { POLICY_TABLE, GENESYS_SYNC_STATE_TABLE, PolicyRow } from "@/lib/supabase";
 import { parseDueDate, isWithinDaysAhead } from "@/lib/date";
 import { validateFullPolicyInput } from "@/lib/validation";
+import { checkAndAutoSync } from "@/lib/autoSync";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // A newly-added policy might already qualify for auto-send (e.g. its due
+    // date is already within the configured window) — check right away
+    // rather than waiting for the next scheduled sweep.
+    try {
+      await checkAndAutoSync(supabase);
+    } catch {
+      // Never fail the create just because the auto-check hit an issue.
+    }
+
     return NextResponse.json({ policy: data }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -64,6 +74,15 @@ export async function GET(req: NextRequest) {
     }
 
     let rows = (data || []) as PolicyRow[];
+
+    // Attach sync status so the UI can show which policies have already
+    // been sent to Genesys.
+    const { data: syncState } = await supabase
+      .from(GENESYS_SYNC_STATE_TABLE)
+      .select("policy_id, synced_at");
+    const syncedMap = new Map((syncState || []).map((s) => [s.policy_id, s.synced_at]));
+    const rowsWithSync = rows.map((r) => ({ ...r, synced_at: syncedMap.get(r.id) ?? null }));
+    rows = rowsWithSync as PolicyRow[];
 
     if (onlyPending) {
       rows = rows.filter((r) => (r.payment_status || "").toUpperCase() === "PENDING");

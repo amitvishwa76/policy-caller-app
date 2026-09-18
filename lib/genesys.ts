@@ -68,19 +68,21 @@ async function getAccessToken(): Promise<string> {
  * for a contact list contact. Keys on the right must match the columns
  * configured on the actual Genesys contact list exactly (case-sensitive).
  *
+ * Genesys validates that a contact's `data` object contains EXACTLY the
+ * column set defined on the list — sending only a subset is rejected with
+ * "The contact columns do not match what is required in the list". So every
+ * column below is required in the payload, even ones policy_list has no
+ * data for (those go in as empty strings, except the flag columns which
+ * default to "0" so nothing is accidentally marked callable on that channel).
+ *
  * Confirmed contact list columns (2026-09-18): Phone_Num, Policy_Num,
  * Customer_Name, Plan, Premium, Prem_due, Prem_Paid_Status, email_id,
  * whatsapp_num, Voice_flag, WhatsApp_flag, Email_Flag, Dial_Count, Due_days,
  * WA_Temp, Temp1-6.
  *
- * policy_list now also has email_id and whatsapp_num, so those are populated
- * too. The remaining columns (the channel flags, Dial_Count, WA_Temp,
- * Temp1-6) aren't in policy_list, so they're left unset — Genesys will keep
- * whatever default/blank value applies.
- *
- * Most policy_list columns are nullable, so every value here is coerced to
- * a string (empty string if null) rather than risking the literal text
- * "null" being sent to Genesys.
+ * If you want Voice_flag/WhatsApp_flag/Email_Flag set to "1" by default for
+ * every synced contact (so they're immediately dialable/messageable), change
+ * the defaults below.
  */
 export function policyToGenesysContact(policy: PolicyRow) {
   const s = (v: string | number | null) => (v === null || v === undefined ? "" : String(v));
@@ -96,6 +98,19 @@ export function policyToGenesysContact(policy: PolicyRow) {
       email_id: s(policy.email_id),
       whatsapp_num: s(policy.whatsapp_num),
       Due_days: policy.due_date ? daysUntil(policy.due_date) : "",
+      // Columns not present in policy_list — sent as blank/default so the
+      // contact's column set exactly matches the list's schema.
+      Voice_flag: "0",
+      WhatsApp_flag: "0",
+      Email_Flag: "0",
+      Dial_Count: "0",
+      WA_Temp: "",
+      Temp1: "",
+      Temp2: "",
+      Temp3: "",
+      Temp4: "",
+      Temp5: "",
+      Temp6: "",
     },
     callable: true,
   };

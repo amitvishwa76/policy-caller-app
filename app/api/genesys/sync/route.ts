@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import getSupabaseAdmin, { POLICY_TABLE, SYNC_LOG_TABLE, PolicyRow } from "@/lib/supabase";
+import getSupabaseAdmin, {
+  POLICY_TABLE,
+  SYNC_LOG_TABLE,
+  GENESYS_SYNC_STATE_TABLE,
+  PolicyRow,
+} from "@/lib/supabase";
 import { parseDueDate, isWithinDaysAhead } from "@/lib/date";
 import { insertPoliciesToCallingList } from "@/lib/genesys";
 
@@ -48,6 +53,10 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await insertPoliciesToCallingList(rows);
+
+    await supabase.from(GENESYS_SYNC_STATE_TABLE).upsert(
+      rows.map((r) => ({ policy_id: r.id, synced_at: new Date().toISOString() }))
+    );
 
     await logSyncResult(supabase, {
       trigger: "manual",

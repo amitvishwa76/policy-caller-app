@@ -33,10 +33,12 @@ export type PolicyRow = {
   phone_num: string | null;
   email_id: string | null;
   whatsapp_num: string | null;
+  synced_at?: string | null;
 };
 
 export const POLICY_TABLE = "policy_list";
 export const SETTINGS_TABLE = "sync_settings";
 export const SYNC_LOG_TABLE = "sync_log";
+export const GENESYS_SYNC_STATE_TABLE = "genesys_sync_state";
 
 export default getSupabaseAdmin;

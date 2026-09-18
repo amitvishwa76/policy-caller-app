@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import { Policy } from "@/lib/types";
 import { dueDateToInputValue, inputValueToDueDate } from "@/lib/date";
 
@@ -119,11 +120,21 @@ export default function PolicyFormModal({
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="bg-[var(--paper-raised)] border hairline rounded-sm p-6 w-full max-w-md flex flex-col gap-4"
+        className="surface rounded-2xl p-6 w-full max-w-md flex flex-col gap-4 shadow-[var(--shadow-md)]"
       >
-        <h2 className="font-serif-brand text-xl text-[var(--navy)]">
-          {mode === "add" ? "Add policy" : `Edit policy ${initial?.policy_no}`}
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-serif-brand text-xl text-[var(--navy)]">
+            {mode === "add" ? "Add policy" : `Edit policy ${initial?.policy_no}`}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--paper)] hover:text-[var(--ink)] transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
         <Field label="Policy number">
           <input
@@ -225,14 +236,14 @@ export default function PolicyFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-sm border hairline hover:bg-black/5"
+            className="px-4 py-2 text-sm rounded-lg border hairline hover:bg-[var(--paper)]"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="px-4 py-2 text-sm rounded-sm bg-[var(--navy)] text-white hover:bg-[var(--navy-deep)] disabled:opacity-40"
+            className="px-4 py-2 text-sm rounded-lg bg-[var(--navy)] text-white hover:bg-[var(--navy-deep)] disabled:opacity-40"
           >
             {saving ? "Saving…" : mode === "add" ? "Add policy" : "Save changes"}
           </button>
@@ -241,9 +252,10 @@ export default function PolicyFormModal({
         <style jsx>{`
           .input {
             border: 1px solid var(--border);
-            border-radius: 2px;
+            border-radius: 0.5rem;
             padding: 0.5rem 0.75rem;
-            background: transparent;
+            background: var(--paper-raised);
+            color: var(--ink);
             width: 100%;
           }
         `}</style>

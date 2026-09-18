@@ -13,12 +13,13 @@ export type Policy = {
   phone_num: string | null;
   email_id: string | null;
   whatsapp_num: string | null;
+  synced_at?: string | null;
 };
 
 export type Settings = {
   id: number;
-  frequency: "off" | "daily" | "twice_daily";
   days_ahead: number;
   only_pending: boolean;
-  last_run_at: string | null;
+  auto_send: boolean;
+  last_auto_check_at: string | null;
 };

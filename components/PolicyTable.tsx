@@ -16,14 +16,14 @@ export default function PolicyTable({
 }) {
   if (policies.length === 0) {
     return (
-      <div className="border hairline rounded-sm p-10 text-center text-[var(--ink-soft)]">
+      <div className="surface rounded-xl p-10 text-center text-[var(--ink-soft)]">
         No policies to show. Loosen the filter or check the table has data.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto border hairline rounded-sm bg-[var(--paper-raised)]">
+    <div className="surface rounded-xl overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b hairline text-left text-[var(--ink-soft)]">
@@ -45,8 +45,8 @@ export default function PolicyTable({
             return (
               <tr
                 key={p.id}
-                className={`border-b hairline last:border-0 ${
-                  dueSoon ? "bg-[var(--amber-soft)]/40" : ""
+                className={`border-b hairline last:border-0 transition-colors ${
+                  dueSoon ? "bg-[var(--amber-soft)]/50" : "hover:bg-[var(--paper)]/60"
                 }`}
               >
                 <td className="px-4 py-3 font-mono-data">{p.policy_no}</td>
@@ -62,6 +62,9 @@ export default function PolicyTable({
                   {p.due_date || EMPTY}
                   {dueSoon && (
                     <span className="ml-2 text-xs text-[var(--amber)]">due soon</span>
+                  )}
+                  {p.synced_at && (
+                    <span className="ml-2 text-xs text-[var(--success)]">✓ sent</span>
                   )}
                 </td>
                 <td className="px-4 py-3 font-mono-data">{p.phone_num || EMPTY}</td>

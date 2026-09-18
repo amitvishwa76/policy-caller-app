@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import getSupabaseAdmin, { POLICY_TABLE } from "@/lib/supabase";
 import { validatePartialPolicyInput } from "@/lib/validation";
+import { checkAndAutoSync } from "@/lib/autoSync";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         );
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // An edited policy (e.g. corrected due date, or flipped to PENDING)
+    // might now qualify for auto-send — check right away.
+    try {
+      await checkAndAutoSync(supabase);
+    } catch {
+      // Never fail the edit just because the auto-check hit an issue.
     }
 
     return NextResponse.json({ policy: data });

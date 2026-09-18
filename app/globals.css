@@ -1,22 +1,51 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --paper: #f7f5ef;
+  --paper: #f6f5f2;
   --paper-raised: #ffffff;
-  --ink: #20221e;
-  --ink-soft: #5c5c54;
-  --navy: #1f3a5f;
-  --navy-deep: #142a45;
+  --ink: #1a1c1e;
+  --ink-soft: #6b6f76;
+  --navy: #2b4c7e;
+  --navy-deep: #1f3b63;
+  --accent: #6c5ce7;
+  --accent-soft: #efeafc;
   --amber: #c98a2e;
-  --amber-soft: #f2e2c4;
-  --success: #3f7a54;
-  --danger: #b23a32;
-  --border: #ded9cc;
-  --border-strong: #c7c0ab;
+  --amber-soft: #f7e6c8;
+  --success: #2f9e5b;
+  --success-soft: #e3f6ea;
+  --danger: #d64545;
+  --danger-soft: #fdeaea;
+  --border: #e6e3dc;
+  --border-strong: #d3cfc4;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 20, 0.04);
+  --shadow-md: 0 4px 16px rgba(20, 20, 20, 0.06);
 
   --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, ui-serif, serif;
   --font-sans: -apple-system, "Segoe UI", "IBM Plex Sans", ui-sans-serif, Arial, sans-serif;
   --font-mono: "SF Mono", "IBM Plex Mono", Menlo, Consolas, ui-monospace, monospace;
+}
+
+.dark {
+  --paper: #14161a;
+  --paper-raised: #1c1f25;
+  --ink: #eceef1;
+  --ink-soft: #9aa0aa;
+  --navy: #6f95d6;
+  --navy-deep: #8facdf;
+  --accent: #a394f5;
+  --accent-soft: #262238;
+  --amber: #e0a94f;
+  --amber-soft: #3a2f1a;
+  --success: #4fbd7d;
+  --success-soft: #163326;
+  --danger: #e57373;
+  --danger-soft: #3a1e1e;
+  --border: #2b2f37;
+  --border-strong: #3a3f49;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.45);
 }
 
 @theme inline {
@@ -28,10 +57,19 @@
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .font-serif-brand {
@@ -44,4 +82,11 @@ body {
 
 .hairline {
   border-color: var(--border);
+}
+
+.surface {
+  background: var(--paper-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
