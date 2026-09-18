@@ -24,11 +24,19 @@ export async function POST(req: NextRequest) {
         plan: body.plan,
         due_date: body.due_date,
         phone_num: body.phone_num,
+        email_id: body.email_id || null,
+        whatsapp_num: body.whatsapp_num || null,
       })
       .select("*")
       .single();
 
     if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: `Policy number "${body.policy_no}" already exists.` },
+          { status: 409 }
+        );
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 

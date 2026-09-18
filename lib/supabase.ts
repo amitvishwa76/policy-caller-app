@@ -22,11 +22,17 @@ export type PolicyRow = {
   id: number;
   policy_no: string;
   payment_status: string;
-  amount: number;
-  policy_holder: string;
-  plan: string;
-  due_date: string; // stored as text, e.g. "18 Jun 2026"
-  phone_num: string;
+  transaction_id: string | null;
+  amount: number | null;
+  paid_at: string | null;
+  policy_holder: string | null;
+  plan: string | null;
+  due_date: string | null; // stored as text, e.g. "18 Jun 2026"
+  created_at: string;
+  updated_at: string;
+  phone_num: string | null;
+  email_id: string | null;
+  whatsapp_num: string | null;
 };
 
 export const POLICY_TABLE = "policy_list";

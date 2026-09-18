@@ -3,6 +3,8 @@
 import { Policy } from "@/lib/types";
 import StatusPill from "./StatusPill";
 
+const EMPTY = <span className="text-[var(--ink-soft)]">—</span>;
+
 export default function PolicyTable({
   policies,
   dueSoonIds,
@@ -32,6 +34,8 @@ export default function PolicyTable({
             <th className="px-4 py-3 font-medium text-right">Amount</th>
             <th className="px-4 py-3 font-medium">Due date</th>
             <th className="px-4 py-3 font-medium">Phone</th>
+            <th className="px-4 py-3 font-medium">Email</th>
+            <th className="px-4 py-3 font-medium">WhatsApp</th>
             <th className="px-4 py-3 font-medium"></th>
           </tr>
         </thead>
@@ -46,21 +50,23 @@ export default function PolicyTable({
                 }`}
               >
                 <td className="px-4 py-3 font-mono-data">{p.policy_no}</td>
-                <td className="px-4 py-3">{p.policy_holder}</td>
-                <td className="px-4 py-3 text-[var(--ink-soft)]">{p.plan}</td>
+                <td className="px-4 py-3">{p.policy_holder || EMPTY}</td>
+                <td className="px-4 py-3 text-[var(--ink-soft)]">{p.plan || EMPTY}</td>
                 <td className="px-4 py-3">
                   <StatusPill status={p.payment_status} />
                 </td>
                 <td className="px-4 py-3 text-right font-mono-data">
-                  &#8377;{Number(p.amount).toLocaleString("en-IN")}
+                  {p.amount !== null ? `\u20B9${Number(p.amount).toLocaleString("en-IN")}` : EMPTY}
                 </td>
                 <td className="px-4 py-3 font-mono-data">
-                  {p.due_date}
+                  {p.due_date || EMPTY}
                   {dueSoon && (
                     <span className="ml-2 text-xs text-[var(--amber)]">due soon</span>
                   )}
                 </td>
-                <td className="px-4 py-3 font-mono-data">{p.phone_num}</td>
+                <td className="px-4 py-3 font-mono-data">{p.phone_num || EMPTY}</td>
+                <td className="px-4 py-3 text-[var(--ink-soft)]">{p.email_id || EMPTY}</td>
+                <td className="px-4 py-3 font-mono-data">{p.whatsapp_num || EMPTY}</td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => onEdit(p)}

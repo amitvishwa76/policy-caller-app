@@ -1,4 +1,5 @@
 import type { PolicyRow } from "./supabase";
+import { parseDueDate } from "./date";
 
 /**
  * Genesys Cloud integration.
@@ -64,23 +65,51 @@ async function getAccessToken(): Promise<string> {
 
 /**
  * Maps a Supabase policy_list row into the `data` payload Genesys expects
- * for a contact list contact. Column names on the right must match the
- * columns configured on your Genesys contact list exactly (case-sensitive).
- * Adjust this mapping to match your actual contact list schema.
+ * for a contact list contact. Keys on the right must match the columns
+ * configured on the actual Genesys contact list exactly (case-sensitive).
+ *
+ * Confirmed contact list columns (2026-09-18): Phone_Num, Policy_Num,
+ * Customer_Name, Plan, Premium, Prem_due, Prem_Paid_Status, email_id,
+ * whatsapp_num, Voice_flag, WhatsApp_flag, Email_Flag, Dial_Count, Due_days,
+ * WA_Temp, Temp1-6.
+ *
+ * policy_list now also has email_id and whatsapp_num, so those are populated
+ * too. The remaining columns (the channel flags, Dial_Count, WA_Temp,
+ * Temp1-6) aren't in policy_list, so they're left unset — Genesys will keep
+ * whatever default/blank value applies.
+ *
+ * Most policy_list columns are nullable, so every value here is coerced to
+ * a string (empty string if null) rather than risking the literal text
+ * "null" being sent to Genesys.
  */
 export function policyToGenesysContact(policy: PolicyRow) {
+  const s = (v: string | number | null) => (v === null || v === undefined ? "" : String(v));
   return {
     data: {
-      Phone: policy.phone_num,
-      PolicyNo: policy.policy_no,
-      PolicyHolder: policy.policy_holder,
-      Plan: policy.plan,
-      Amount: String(policy.amount),
-      DueDate: policy.due_date,
-      PaymentStatus: policy.payment_status,
+      Phone_Num: s(policy.phone_num),
+      Policy_Num: s(policy.policy_no),
+      Customer_Name: s(policy.policy_holder),
+      Plan: s(policy.plan),
+      Premium: s(policy.amount),
+      Prem_due: s(policy.due_date),
+      Prem_Paid_Status: s(policy.payment_status),
+      email_id: s(policy.email_id),
+      whatsapp_num: s(policy.whatsapp_num),
+      Due_days: policy.due_date ? daysUntil(policy.due_date) : "",
     },
     callable: true,
   };
+}
+
+/** Days from today until the given "18 Jun 2026"-style due date; empty string if unparseable. */
+function daysUntil(dueDateText: string): string {
+  const due = parseDueDate(dueDateText);
+  if (!due) return "";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  const diff = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return String(diff);
 }
 
 export type GenesysSyncResult = {

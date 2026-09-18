@@ -12,6 +12,8 @@ type FormState = {
   plan: string;
   due_date_input: string; // yyyy-mm-dd, for the <input type="date">
   phone_num: string;
+  email_id: string;
+  whatsapp_num: string;
 };
 
 function toFormState(policy: Policy | null): FormState {
@@ -24,16 +26,20 @@ function toFormState(policy: Policy | null): FormState {
       plan: "",
       due_date_input: "",
       phone_num: "",
+      email_id: "",
+      whatsapp_num: "",
     };
   }
   return {
     policy_no: policy.policy_no,
     payment_status: policy.payment_status,
-    amount: String(policy.amount),
-    policy_holder: policy.policy_holder,
-    plan: policy.plan,
-    due_date_input: dueDateToInputValue(policy.due_date),
-    phone_num: policy.phone_num,
+    amount: policy.amount !== null ? String(policy.amount) : "",
+    policy_holder: policy.policy_holder || "",
+    plan: policy.plan || "",
+    due_date_input: policy.due_date ? dueDateToInputValue(policy.due_date) : "",
+    phone_num: policy.phone_num || "",
+    email_id: policy.email_id || "",
+    whatsapp_num: policy.whatsapp_num || "",
   };
 }
 
@@ -78,6 +84,8 @@ export default function PolicyFormModal({
       plan: form.plan.trim(),
       due_date: inputValueToDueDate(form.due_date_input),
       phone_num: form.phone_num.trim(),
+      email_id: form.email_id.trim() || null,
+      whatsapp_num: form.whatsapp_num.trim() || null,
     };
 
     setSaving(true);
@@ -185,6 +193,26 @@ export default function PolicyFormModal({
               required
               value={form.phone_num}
               onChange={(e) => update("phone_num", e.target.value.replace(/[^\d]/g, ""))}
+              className="input font-mono-data"
+              inputMode="numeric"
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Email (optional)">
+            <input
+              type="email"
+              value={form.email_id}
+              onChange={(e) => update("email_id", e.target.value)}
+              className="input"
+            />
+          </Field>
+
+          <Field label="WhatsApp number (optional)">
+            <input
+              value={form.whatsapp_num}
+              onChange={(e) => update("whatsapp_num", e.target.value.replace(/[^\d]/g, ""))}
               className="input font-mono-data"
               inputMode="numeric"
             />
